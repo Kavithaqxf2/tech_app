@@ -1,0 +1,304 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Sun, Moon, Home, Award, HelpCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Switch } from '@/components/ui/switch'
+import { useSound } from 'use-sound'
+import confetti from 'canvas-confetti'
+
+const quizQuestions = {
+  history: [
+    { question: "When did India gain independence?", options: ["1945", "1947", "1950", "1952"], correct: "1947" },
+    { question: "Who was India's first Prime Minister?", options: ["Mahatma Gandhi", "Jawaharlal Nehru", "Sardar Patel", "Subhas Chandra Bose"], correct: "Jawaharlal Nehru" },
+    { question: "Which empire ruled large parts of India before the British?", options: ["Maurya Empire", "Gupta Empire", "Mughal Empire", "Maratha Empire"], correct: "Mughal Empire" },
+    { question: "In which year was the Indian National Congress founded?", options: ["1885", "1905", "1920", "1935"], correct: "1885" },
+    { question: "Who is known as the 'Iron Man of India'?", options: ["Bhagat Singh", "Sardar Vallabhbhai Patel", "Lal Bahadur Shastri", "B.R. Ambedkar"], correct: "Sardar Vallabhbhai Patel" },
+  ],
+  culture: [
+    { question: "What is the national flower of India?", options: ["Rose", "Lotus", "Sunflower", "Marigold"], correct: "Lotus" },
+    { question: "Which festival is known as the 'Festival of Colors'?", options: ["Diwali", "Holi", "Navratri", "Pongal"], correct: "Holi" },
+    { question: "What is the traditional Indian greeting?", options: ["Hello", "Namaste", "Salaam", "Vanakkam"], correct: "Namaste" },
+    { question: "Which classical dance form originated in the state of Kerala?", options: ["Bharatanatyam", "Kathak", "Kathakali", "Odissi"], correct: "Kathakali" },
+    { question: "What is the most widely practiced religion in India?", options: ["Buddhism", "Christianity", "Hinduism", "Islam"], correct: "Hinduism" },
+  ],
+  food: [
+    { question: "What is the main ingredient in a traditional Indian dish called 'Dal'?", options: ["Rice", "Wheat", "Lentils", "Potatoes"], correct: "Lentils" },
+    { question: "Which Indian bread is typically cooked in a tandoor oven?", options: ["Naan", "Roti", "Paratha", "Puri"], correct: "Naan" },
+    { question: "What is the name of the popular Indian rice dish often made with meat or vegetables?", options: ["Biryani", "Pulao", "Khichdi", "Upma"], correct: "Biryani" },
+    { question: "Which spice is known as the 'Queen of Spices' in Indian cuisine?", options: ["Turmeric", "Cardamom", "Cinnamon", "Cumin"], correct: "Cardamom" },
+    { question: "What is the main ingredient in the popular Indian dessert 'Gulab Jamun'?", options: ["Rice flour", "Wheat flour", "Milk solids", "Semolina"], correct: "Milk solids" },
+  ],
+  language: [
+    { question: "How many official languages are recognized in India?", options: ["18", "22", "28", "32"], correct: "22" },
+    { question: "Which language is the most widely spoken in India?", options: ["English", "Hindi", "Bengali", "Tamil"], correct: "Hindi" },
+    { question: "What script is used to write Hindi?", options: ["Latin", "Devanagari", "Arabic", "Cyrillic"], correct: "Devanagari" },
+    { question: "Which Indian language is considered to be one of the oldest in the world?", options: ["Sanskrit", "Tamil", "Malayalam", "Telugu"], correct: "Sanskrit" },
+    { question: "In which state is Urdu the official language?", options: ["Uttar Pradesh", "Bihar", "Jammu and Kashmir", "Telangana"], correct: "Jammu and Kashmir" },
+  ],
+  clothing: [
+    { question: "What is the traditional dress for Indian women?", options: ["Kimono", "Sari", "Cheongsam", "Dirndl"], correct: "Sari" },
+    { question: "Which Indian state is famous for its Phulkari embroidery?", options: ["Gujarat", "Rajasthan", "Punjab", "West Bengal"], correct: "Punjab" },
+    { question: "What is a 'Dhoti'?", options: ["A type of shirt", "A headgear", "A lower garment for men", "A type of shoe"], correct: "A lower garment for men" },
+    { question: "Which fabric is traditionally associated with Mahatma Gandhi's movement?", options: ["Silk", "Cotton", "Wool", "Khadi"], correct: "Khadi" },
+    { question: "What is a 'Bandhani'?", options: ["A type of necklace", "A tie-dye textile", "A traditional dance", "A musical instrument"], correct: "A tie-dye textile" },
+  ],
+}
+
+export default function Component() {
+  const [name, setName] = useState('')
+  const [darkMode, setDarkMode] = useState(false)
+  const [currentScreen, setCurrentScreen] = useState('welcome')
+  const [selectedCategory, setSelectedCategory] = useState('')
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [score, setScore] = useState(0)
+  const [showHelp, setShowHelp] = useState(false)
+  const [timeLeft, setTimeLeft] = useState(30)
+  const [progress, setProgress] = useState([])
+  const [showConfetti, setShowConfetti] = useState(false)
+
+  const [playCorrect] = useSound('/sounds/correct.mp3')
+  const [playIncorrect] = useSound('/sounds/incorrect.mp3')
+  const [playAchievement] = useSound('/sounds/achievement.mp3')
+
+  useEffect(() => {
+    const savedProgress = localStorage.getItem('quizProgress')
+    if (savedProgress) {
+      setProgress(JSON.parse(savedProgress))
+    }
+  }, [])
+
+  useEffect(() => {
+    if (currentScreen === 'quiz' && timeLeft > 0) {
+      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000)
+      return () => clearTimeout(timer)
+    } else if (timeLeft === 0) {
+      handleNextQuestion()
+    }
+  }, [currentScreen, timeLeft])
+
+  useEffect(() => {
+    if (showConfetti) {
+      const timer = setTimeout(() => setShowConfetti(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [showConfetti]);
+
+  const handleStartQuiz = (category) => {
+    setSelectedCategory(category)
+    setCurrentScreen('quiz')
+    setCurrentQuestionIndex(0)
+    setScore(0)
+    setTimeLeft(30)
+  }
+
+  const handleAnswer = (answer) => {
+    if (answer === quizQuestions[selectedCategory][currentQuestionIndex].correct) {
+      setScore(score + 1)
+      playCorrect()
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+      })
+    } else {
+      playIncorrect()
+    }
+    handleNextQuestion()
+  }
+
+  const handleNextQuestion = () => {
+    if (currentQuestionIndex < quizQuestions[selectedCategory].length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1)
+      setTimeLeft(30)
+    } else {
+      setCurrentScreen('result')
+      const newProgress = [...progress, { date: new Date().toISOString(), score: score + 1 }]
+      setProgress(newProgress)
+      localStorage.setItem('quizProgress', JSON.stringify(newProgress))
+      if (score + 1 > 3) {
+        setShowConfetti(true)
+        playAchievement()
+        confetti({
+          particleCount: 200,
+          spread: 100,
+          origin: { y: 0.6 }
+        })
+      }
+    }
+  }
+
+  const handleHelp = () => {
+    setShowHelp(true)
+    setTimeLeft(timeLeft + 10)
+  }
+
+  return (
+    <div className={`min-h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-orange-50'}`}>
+      <nav className="p-4 flex justify-between items-center bg-gradient-to-r from-orange-500 to-red-500 text-white">
+        <Button variant="ghost" size="icon" onClick={() => setCurrentScreen('welcome')} className="text-white hover:text-white/80">
+          <Home className="h-6 w-6" />
+        </Button>
+        <h1 className="text-2xl font-bold">Indian Culture Buddy</h1>
+        <Button onClick={() => setDarkMode(!darkMode)} variant="ghost" size="icon" className="text-white hover:text-white/80">
+          {darkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
+        </Button>
+      </nav>
+
+      <main className="container mx-auto p-4">
+        <AnimatePresence mode="wait">
+          {currentScreen === 'welcome' && (
+            <motion.div
+              key="welcome"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.5 }}
+            >
+              <Card className="bg-gradient-to-r from-orange-400 to-red-500 text-white">
+                <CardContent className="p-6">
+                  <h2 className="text-3xl font-bold mb-4">Welcome to Indian Culture Buddy!</h2>
+                  <p className="mb-4">Created by P.K.Darrshan</p>
+                  <p className="mb-4">Ready to learn and test your knowledge about India?</p>
+                  <Input
+                    type="text"
+                    placeholder="Enter your name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="mb-4 text-gray-800"
+                  />
+                  <Button 
+                    onClick={() => setCurrentScreen('categories')} 
+                    className="bg-green-500 text-white hover:bg-green-600"
+                    disabled={!name.trim()}
+                  >
+                    Let's Start!
+                  </Button>
+                </CardContent>
+              </Card>
+              {progress.length > 0 && (
+                <Card className="mt-4 bg-white dark:bg-gray-800">
+                  <CardContent className="p-4">
+                    <h3 className="text-xl font-bold mb-2">Your Progress</h3>
+                    <ul>
+                      {progress.slice(-5).map((entry, index) => (
+                        <li key={index} className="mb-2">
+                          <span className="font-semibold">{new Date(entry.date).toLocaleDateString()}: </span>
+                          <span>{entry.score} / 5</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+            </motion.div>
+          )}
+
+          {currentScreen === 'categories' && (
+            <motion.div
+              key="categories"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.5 }}
+            >
+              <h2 className="text-3xl font-bold mb-6 text-center text-orange-600 dark:text-orange-400">Choose a Category, {name}!</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Object.keys(quizQuestions).map((category) => (
+                  <Card key={category} className="overflow-hidden bg-gradient-to-br from-orange-100 to-red-100 dark:from-orange-900 dark:to-red-900">
+                    <CardContent className="p-0">
+                      <Button
+                        onClick={() => handleStartQuiz(category)}
+                        className="w-full h-full p-6 text-center text-orange-800 dark:text-orange-100 hover:bg-orange-200 dark:hover:bg-orange-800"
+                        variant="ghost"
+                      >
+                        <h3 className="text-2xl font-semibold capitalize">{category}</h3>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {currentScreen === 'quiz' && (
+            <motion.div
+              key="quiz"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.5 }}
+            >
+              <h2 className="text-3xl font-bold mb-6 text-center capitalize text-orange-600 dark:text-orange-400">{selectedCategory} Quiz</h2>
+              <Card className="mb-6 bg-white dark:bg-gray-800">
+                <CardContent className="p-6">
+                  <p className="text-xl mb-4 text-gray-800 dark:text-gray-200">{quizQuestions[selectedCategory][currentQuestionIndex].question}</p>
+                  <RadioGroup onValueChange={handleAnswer}>
+                    {quizQuestions[selectedCategory][currentQuestionIndex].options.map((option) => (
+                      <div key={option} className="flex items-center space-x-2 mb-2">
+                        <RadioGroupItem value={option} id={option} className="border-orange-500 text-orange-500" />
+                        <Label htmlFor={option} className="text-gray-700 dark:text-gray-300">{option}</Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </CardContent>
+              </Card>
+              <div className="flex justify-between items-center">
+                <Button onClick={handleHelp} disabled={showHelp} className="bg-green-500 text-white hover:bg-green-600">
+                  <HelpCircle className="mr-2 h-4 w-4" />
+                  Help
+                </Button>
+                <p className="text-xl font-semibold text-orange-600 dark:text-orange-400">Time left: {timeLeft}s</p>
+              </div>
+              {showHelp && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 p-4 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 rounded-md"
+                >
+                  <p>Hint: The correct answer is related to {selectedCategory} in India.</p>
+                </motion.div>
+              )}
+            </motion.div>
+          )}
+
+          {currentScreen === 'result' && (
+            <motion.div
+              key="result"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.5 }}
+              className="text-center"
+            >
+              <Card className="bg-gradient-to-r from-blue-400 to-purple-500 text-white">
+                <CardContent className="p-6">
+                  <h2 className="text-4xl font-bold mb-6">
+                    {score > 3 ? 'Congratulations!' : 'You could learn more!'}
+                  </h2>
+                  <p className="text-2xl mb-6">
+                    {name}, you scored {score} out of {quizQuestions[selectedCategory].length}
+                  </p>
+                  {score > 3 && (
+                    <div>
+                      <Award className="h-24 w-24 mx-auto mb-4 text-yellow-300" />
+                      <p className="text-xl mb-6">You're a master of Indian {selectedCategory}!</p>
+                    </div>
+                  )}
+                  <Button onClick={() => setCurrentScreen('categories')} size="lg" className="bg-green-500 text-white hover:bg-green-600">
+                    Try Another Category
+                  </Button>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+    </div>
+  )
+}
